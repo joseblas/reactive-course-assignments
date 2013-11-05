@@ -8,46 +8,41 @@ import Gen._
 import Prop._
 
 abstract class QuickCheckHeap extends Properties("Heap") with IntHeap {
-  // The minimum of a single-element heap will be the single element
-  property("min1") = forAll { a: Int =>
-    val h = insert(a, empty)
-    findMin(h) == a
+  def anyRepeats[T](l: List[T]): Boolean =
+    if (l.isEmpty) false
+    else if (l.length == 1) false
+    else (for {
+        a <- 0 until l.length
+        b <- 0 until a
+      } yield l(a) == l(b)).reduceLeft((a, b) => a || b)
+  
+  def genList(h: H): List[Int] = {
+    def genListAcc(h: H, acc: List[Int]): List[Int] =
+      if (isEmpty(h)) acc
+      else            genListAcc(deleteMin(h), acc :+ findMin(h))
+    genListAcc(h, List())
   }
   
-  // Finding the minimum value of a 2-element heap will be the smaller
-  // of the two elements
-  property("min2") = forAll { (a: Int, b: Int) =>
-    val m = findMin(insert(a, insert(b, empty)))
+  // Filtering out the first and second bogus
+  property("bogusOneTwo") = forAll { (a: Int, h: H) =>
+    if (a <= findMin(h)) findMin(insert(a, h)) == a
+    else                 true
+  }
+  
+  // Filtering out the third bogus
+  property("bogusThreeFour") = forAll { (h: H, as: List[Int]) =>
+    def containsAll[T](ts1: List[T], ts2: List[T]): Boolean =
+      if (ts2.isEmpty) true
+      else ts2.map(a => ts1.contains(a)).reduceLeft((a, b) => a && b)
+    containsAll(genList(as.foldLeft(h)((b, a) => insert(a, b))), as)
+  }
+  
+  // Filtering out the last bogus
+  property("bogusFive") = forAll { (h1: H, h2: H) =>
+    val l1 = genList(h1)
+    val l2 = genList(h2)
     
-    if (a >= b) m == b
-    else        m == a
-  }
-  
-  // Deleting the smallest element in a single-element heap will
-  // result in an empty head
-  property("min3") = forAll { a: Int => isEmpty(deleteMin(insert(a, empty))) }
-  
-  // Assembling a list from the minimums of a heap will result in
-  // a sorted list
-  property("min4") = forAll { h: H =>
-    // Generating the list
-    def genList: List[Int] = {
-      def genListAcc(h: H, acc: List[Int]): List[Int] =
-        if (isEmpty(h)) acc
-        else            genListAcc(deleteMin(h), acc :+ findMin(h))
-      
-      genListAcc(h, List())
-    }
-    
-    genList == genList.sorted(ord)
-  }
-  
-  // The minimum of the union of two heaps will result in either
-  // the minimum of the first heap or the second heap
-  property("min5") = forAll { (h1: H, h2: H) =>
-    val m = meld(h1, h2)
-    try { findMin(m) == findMin(h1) || findMin(m) == findMin(h2) }
-    catch { case e: NoSuchElementException => true }
+    genList(meld(h1, h2)).length == (l1 ++ l2).length
   }
 
   // Generating a heap
