@@ -59,16 +59,27 @@ class CircuitSuite extends CircuitSimulator with FunSuite {
   }
   
   test("demux") {
+    import scala.collection.mutable._
     def makeWireList(n: Int): List[Wire] =
-      if (n == 0) List()
-      else        List(new Wire) ++ makeWireList(n - 1)
+      (0 until n).map(a => new Wire).foldLeft(List[Wire]())((a, b) => a :+ b)
     
-    // Making sure the wire test works
-    (0 to 10).toList.foreach(a => assert(makeWireList(a).length === a, "wireListTest"))
-      
     val in = new Wire
-    val cs, os = makeWireList(5)
+    val cs = makeWireList(4)
+    val os = makeWireList(5)
+    demux(in, cs, os)
     
-    // TODO: Implement demux test
+    in.setSignal(false)
+    cs.foreach(a => a.setSignal(false))
+    run
+    assert(os.forall(a => a.getSignal == false), "demux 1")
+    
+    in.setSignal(true)
+    for (n <- 0 until cs.length)
+    yield {
+      if (n > 0) cs(n - 1).setSignal(false)
+      cs(n).setSignal(true)
+      run
+      assert(os(n + 1).getSignal == true, "demux " + (n + 2))
+    }
   }
 }

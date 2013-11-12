@@ -7,7 +7,6 @@ import java.awt.{Graphics, Graphics2D, GridLayout, BorderLayout, Color, Dimensio
 import java.awt.event.{ActionListener, ActionEvent}
 
 object EpidemyDisplay extends EpidemySimulator with App {
-
   class Situation(var healthy: Int, var sick: Int, var immune: Int) {
     def reset { healthy = 0; sick = 0; immune = 0 }
     def count(p: Person) {

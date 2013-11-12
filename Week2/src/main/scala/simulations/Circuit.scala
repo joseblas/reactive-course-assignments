@@ -76,9 +76,20 @@ abstract class CircuitSimulator extends Simulator {
     inverter(nout, output)
   }
 
-  def demux(in: Wire, c: List[Wire], out: List[Wire]) {
-    if (c.length == 0 && out.length == 1) out.head.setSignal(in.getSignal)
-    else                                  ??? // TODO: Recursively bring it down to the simplest case
+  def demux(in: Wire, c: List[Wire], out: List[Wire]) = {
+    def demuxAction() {
+      var done = false
+      for (n <- 0 until c.length)
+      yield if (!done && c(n).getSignal) {
+              done = true
+              out(n + 1).setSignal(in.getSignal)
+            }
+    
+      if (!done) out.head.setSignal(in.getSignal)
+    }
+    
+    in addAction demuxAction
+    c.foreach(a => a addAction demuxAction)
   }
 }
 

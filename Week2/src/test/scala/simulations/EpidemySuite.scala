@@ -96,9 +96,10 @@ class EpidemySuite extends FunSuite {
 		  es.persons.filter(p => p != healthyPerson) foreach {_.infected = true}
 
       while(es.agenda.head.time < 6) es.next
-
+      
       infectedTimes = infectedTimes + (if(healthyPerson.infected) 1 else 0)
 	  }
+	  
 	  assert(infectedTimes > 0, "A person should get infected according to the transmissibility rate when he moves into a room with an infectious person")
   }
 }
