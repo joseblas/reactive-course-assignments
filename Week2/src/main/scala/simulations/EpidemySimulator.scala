@@ -19,7 +19,6 @@ class EpidemySimulator extends Simulator {
     val startInfectedChance: Int =  1
     val transmitChance     : Int = 40
     val deathChance        : Int = 25
-    val moveChance         : Int = 20
     
     val incubationTime: Int =  6
     val dieTime       : Int = 14
@@ -38,20 +37,20 @@ class EpidemySimulator extends Simulator {
     
     def move(p: Person) {
       def moveAction() {
-        afterDelay(1) {
-          val validNeighbors = if (p.sick) p.neighborRooms
-                               else p.neighborRooms.filterNot(a => hasAnySick(a) || hasAnyDead(a))
+        afterDelay(randomBelow(5)) {
+          val validNeighbors = p.neighborRooms.filterNot(a => hasAnySick(a) || hasAnyDead(a))
           
-          if (!validNeighbors.isEmpty && !p.dead && (p.daysUnmoved >= 5 || randomBoolean(moveChance))) {
+          if (!validNeighbors.isEmpty && !p.dead) {
             validNeighbors(randomBelow(validNeighbors.length)) match {
               case (x, y) => {
                 p.row = x; p.col = y
-                if (hasAnyInfected(p.row, p.col) && !p.immune && !p.infected)
+                if (hasAnyInfected(p.row, p.col) && !p.immune && !p.infected) {
                   p.infected = randomBoolean(transmitChance)
+                  incubate(p)
+                }
               }
             }
-            p.daysUnmoved = 0
-          } else p.daysUnmoved += 1
+          }
           
           move(p)
         }
@@ -62,26 +61,52 @@ class EpidemySimulator extends Simulator {
     
     def incubate(p: Person) {
       def incubateAction() {
-        afterDelay(1) {
-          if (p.infected) {
-            p.daysInfected += 1
-            
-            if (!p.dead && p.daysInfected >= healTime)        { p.infected = false; p.immune = false; p.daysInfected = 0 }
-            else if (!p.dead && p.daysInfected >= immuneTime) { p.sick = false; p.immune = true; }
-            else if (!p.dead && p.daysInfected >= dieTime)               { p.dead = randomBoolean(deathChance) }
-            else if (!p.dead && p.daysInfected >= incubationTime) { p.sick = true }
-          }
-          
-          incubate(p)
+        afterDelay(incubationTime) {
+          p.sick = true
+          die(p)
         }
       }
       
       p addAction incubateAction
     }
+    
+    def die(p: Person) {
+      def dieAction() {
+        afterDelay(dieTime - incubationTime) {
+          if (randomBoolean(deathChance)) p.dead = true
+          else immune(p)
+        }
+      }
+      
+      p addAction dieAction
+    }
+    
+    def immune(p: Person) {
+      def immuneAction() {
+        afterDelay(immuneTime - dieTime) {
+          p.sick = false
+          p.immune = true
+          
+          healthy(p)
+        }
+      }
+      
+      p addAction immuneAction
+    }
+    
+    def healthy(p: Person) {
+      def healthyAction() {
+        afterDelay(healTime - immuneTime) {
+          p.infected = false
+          p.immune = false
+        }
+      }
+      
+      p addAction healthyAction
+    }
       
     def addAllActions(p: Person) {
       move(p)
-      incubate(p)
     }
   }
 
@@ -99,12 +124,10 @@ class EpidemySimulator extends Simulator {
   pushPositions
 
   class Person (val id: Int) {
-    private var actions: List[Action] = List()
     var infected = false
     var sick = false
     var immune = false
     var dead = false
-    var daysUnmoved = 0
     var daysInfected = 0
 
     // demonstrates random number generation
@@ -120,9 +143,7 @@ class EpidemySimulator extends Simulator {
            (row                                               , if (col - 1 < 0           ) roomColumns - 1 else col - 1),
            (row                                               , if (col + 1 >= roomColumns) 0               else col + 1))
     
-    def addAction(a: Action): Unit = {
-      actions = a :: actions
+    def addAction(a: Action): Unit =
       a()
-    }
   }
 }
