@@ -60,8 +60,17 @@ trait WikipediaApi {
      *
      * Note: uses the existing combinators on observables.
      */
-    def timedOut(totalSec: Long): Observable[T] =
+    def timedOut(totalSec: Long): Observable[T] = {
+      def delayFuture: Future[Unit] = {
+        val p = Promise[Unit]
+        
+        Future { Thread.sleep(totalSec); Unit } onComplete { case _ => p.success(Unit) }
+        
+        p.future
+      }
+      
       ???
+    }
 
 
     /** Given a stream of events `obs` and a method `requestMethod` to map a request `T` into
