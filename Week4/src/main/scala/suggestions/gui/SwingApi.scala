@@ -51,7 +51,8 @@ trait SwingApi {
       * @param field the text field
       * @return an observable with a stream of text field updates
       */
-    def textValues: Observable[String] = ???
+    def textValues: Observable[String] =
+      ???
 
   }
 
