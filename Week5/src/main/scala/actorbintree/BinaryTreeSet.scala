@@ -155,7 +155,11 @@ class BinaryTreeNode(val elem: Int, initiallyRemoved: Boolean) extends Actor {
   /** Handles `Operation` messages and `CopyTo` requests. */
   val normal: Receive = {
     case Insert  (req, id, sele) => {
-      if (sele < elem)
+      if (sele == elem && removed) {
+        removed = false
+        req ! OperationFinished(id)
+      }
+      else if (sele < elem)
         if (hasL) lRaw ! Insert(req, id, sele)
         else {
           subtrees = subtrees + (Left -> context.actorOf(props(sele, false)))
