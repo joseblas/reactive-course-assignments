@@ -26,6 +26,7 @@ class Replicator(val replica: ActorRef) extends Actor {
 
   // map from sequence number to pair of sender and request
   var acks = Map.empty[Long, (ActorRef, Replicate)]
+  var reqs = Set.empty[Long]
   // a sequence of not-yet-sent snapshots (you can disregard this if not implementing batching)
   var pending = Vector.empty[Snapshot]
   
@@ -38,7 +39,13 @@ class Replicator(val replica: ActorRef) extends Actor {
   
   /* TODO Behavior for the Replicator. */
   def receive: Receive = {
-    case _ =>
+    case Replicate(key, value, seq) => {
+      if (context.sender != self) reqs = reqs + seq
+      
+      replica ! Snapshot(key, value, seq)
+      if (reqs(seq)) Utils.delayFuture(50 milliseconds) onComplete { case _ => self ! Replicate(key, value, seq) }
+    }
+    
+    case SnapshotAck(key, seq) => reqs = reqs - seq
   }
-
 }

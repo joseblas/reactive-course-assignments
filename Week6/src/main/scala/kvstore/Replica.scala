@@ -40,16 +40,6 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   
   arbiter ! Join
   
-  // Creates a future that finishes after a duration
-  // which performs a given function
-  def delayFuture(d: Duration): Future[Unit] = {
-    val p = Promise[Unit]
-    
-    Future { Thread.sleep(d.toMillis) } onComplete { _ => p.success(Unit) }
-    
-    p.future
-  }
-  
   /*
    * The contents of this actor is just a suggestion, you can implement it in any way you like.
    */
@@ -69,44 +59,51 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   val leader: Receive = {
     // Inserting a kv pair
     case Insert   (key, value, id) => {
-      delayFuture(1 second) onComplete(_ => context.sender ! OperationFailed(id))
+      Utils.delayFuture(1 second) onComplete(_ => context.sender ! OperationFailed(id))
       
       kv = kv + (key -> value)
       secondaries.foreach(_._1 ! Replicate(key, Some(value), id))
-      secondaries.map(_ match { case (rd, r) => rd ! Replicate(key, Some(value), id) })
       
       context.sender ! OperationAck(id)
     }
     
     // Removing a kv pair
-    case Remove   (key,        id) => {
-      delayFuture(1 second) onComplete(_ => context.sender ! OperationFailed(id))
+    case Remove   (key, id) => {
+      Utils.delayFuture(1 second) onComplete(_ => context.sender ! OperationFailed(id))
       
       kv = kv - key
-      secondaries.foreach(_._1 ! Replicate(key, None       , id))
+      secondaries.foreach(_._1 ! Replicate(key, None, id))
       
       context.sender ! OperationAck(id)
       
     }
     
     // Accessing a kv pair
-    case Get      (key,        id) =>
+    case Get      (key, id) =>
       context.sender ! GetResult(key, kv.get(key), id)
   }
 
   /* TODO Behavior for the replica role. */
+  var cs = 0
+  
   val replica: Receive = {
-    case Get      (key,        id) =>
+    // Getting information from the replica
+    case Get      (key, id) =>
       context.sender ! GetResult(key, kv.get(key), id)
+    
+    // Updating the replica
+    case Snapshot(key, value, seq) => {
+      if (seq < cs) context.sender ! SnapshotAck(key, seq)
+      else if (seq == cs) {
+        cs += 1
       
-    case Replicate(key, value, id) => {
-      value match {
-        case Some(v) => kv = kv + (key -> v)
-        case None    => kv = kv - key
+        value match {
+          case Some(v) => kv = kv + (key -> v)
+          case None    => kv = kv - key
+        }
+      
+        context.sender ! SnapshotAck(key, seq)
       }
-      
-      secondaries(self) ! Snapshot(key, value, 0) // TODO: Find out how to use seq
-      context.sender ! Replicated(key, id)
     }
   }
 
