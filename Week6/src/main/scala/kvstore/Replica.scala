@@ -38,6 +38,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   import Persistence._
   import context.dispatcher
   
+  val persistence = context.system.actorOf(persistenceProps)
   arbiter ! Join
   
   /*
@@ -47,8 +48,6 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
   var kv = Map.empty[String, String]
   // a map from secondary replicas to replicators
   var secondaries = Map.empty[ActorRef, ActorRef]
-  // the current set of replicators
-  var replicators = Set.empty[ActorRef]
 
   def receive = {
     case JoinedPrimary   => context.become(leader)
@@ -92,7 +91,7 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
       context.sender ! GetResult(key, kv.get(key), id)
     
     // Updating the replica
-    case Snapshot(key, value, seq) => {
+    case s @ Snapshot(key, value, seq) => {
       if (seq < cs) context.sender ! SnapshotAck(key, seq)
       else if (seq == cs) {
         cs += 1
@@ -102,9 +101,29 @@ class Replica(val arbiter: ActorRef, persistenceProps: Props) extends Actor {
           case None    => kv = kv - key
         }
       
-        context.sender ! SnapshotAck(key, seq)
+        context.become(replicaPersist(sender))
+        self ! s 
       }
     }
   }
 
+  def replicaPersist(os: ActorRef): Receive = {
+    PartialFunction {
+      // Still responding to get requests
+      case Get(key, id) =>
+        sender ! GetResult(key, kv.get(key), id)
+      
+      // Trying to push the update out to the Persistence
+      case Snapshot(key, value, seq) => {
+        persistence ! Persist(key, value, seq)
+        Utils.delayFuture(100 millis) onComplete { case _ => self ! Snapshot(key, value, seq) }
+      }
+      
+      // Value successfully peristed
+      case Persisted(key, seq) => {
+        os ! SnapshotAck(key, seq)
+        context.become(replica)
+      }
+    }
+  }
 }
